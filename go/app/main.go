@@ -29,6 +29,10 @@ type Item struct {
 	Category string `json:"category"`
 }
 
+var Items struct {
+	Items []Item `json:"items"`
+}
+
 func root(c echo.Context) error {
 	res := Response{Message: "Hello, world!"}
 	return c.JSON(http.StatusOK, res)
@@ -38,48 +42,42 @@ func addItem(c echo.Context) error {
 	// Get form data
 	name := c.FormValue("name")
 	category := c.FormValue("category")
-	
-	// items.jsonファイルを開くもしくは新規作成
-	file, err := os.OpenFile(ItemsFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		res := Response{Message: "Error opening file"}
-		return c.JSON(http.StatusInternalServerError, res)
-	}
-	defer file.Close()
 
 	// items.jsonのデータを構造体にデコード
-	items := struct {
-		Items []Item `json:"items"`
-	}{}
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&items); err != nil && err != io.EOF {
+	if err := decodeItems(); err != nil {
 		res := Response{Message: "Error decoding JSON"}
 		return c.JSON(http.StatusInternalServerError, res)
 	}
 
 	// 新しい商品情報を追加
 	newItem := Item{Name: name, Category: category}
-	items.Items = append(items.Items, newItem)
-
-	// ファイルを先頭に戻し、内容をクリア
-	file.Seek(0, 0)
-	file.Truncate(0)
+	Items.Items = append(Items.Items, newItem)
 
 	// 更新した内容をエンコードしてファイルに書き込む
-	encoder := json.NewEncoder(file)
-	if err := encoder.Encode(items); err != nil {
+	if err := encodeItems(); err != nil {
 		res := Response{Message: "Error encoding JSON"}
 		return c.JSON(http.StatusInternalServerError, res)
 	}
 	
 	// ログとJSONレスポンスの作成
 	c.Logger().Infof("Received item: %s, Category: %s", name, category)
-	message := fmt.Sprintf("Item received: %s, Category: %s", name, category)
+	message := fmt.Sprintf("item received: %s", name)
 	res := Response{Message: message}
 
 	return c.JSON(http.StatusOK, res)
 
-	// message := fmt.Sprintf("item received: %s", name)
+}
+
+func getItems(c echo.Context) error {
+	// items.jsonのデータを構造体にデコード
+	if err := decodeItems(); err != nil {
+		res := Response{Message: "Error decoding JSON"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	
+	// ログとJSONレスポンスの作成
+	c.Logger().Info("Retrieved items")
+	return c.JSON(http.StatusOK, Items)
 }
 
 func getImg(c echo.Context) error {
@@ -95,6 +93,41 @@ func getImg(c echo.Context) error {
 		imgPath = path.Join(ImgDir, "default.jpg")
 	}
 	return c.File(imgPath)
+}
+
+// decodeItems は items.json ファイルをデコードする関数
+func decodeItems() error {
+	file, err := os.OpenFile(ItemsFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	decoder := json.NewDecoder(file)
+	if err := decoder.Decode(&Items); err != nil && err != io.EOF {
+		return err
+	}
+
+	return nil
+}
+
+// encodeItems は items.json ファイルにエンコードする関数
+func encodeItems() error {
+	file, err := os.OpenFile(ItemsFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	file.Seek(0, 0)
+	file.Truncate(0)
+
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(Items); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {
@@ -117,6 +150,7 @@ func main() {
 	// Routes
 	e.GET("/", root)
 	e.POST("/items", addItem)
+	e.GET("/items", getItems)
 	e.GET("/image/:imageFilename", getImg)
 
 
