@@ -15,6 +15,7 @@ import (
 	"io"
 	"crypto/sha256"
 	"mime/multipart"
+	"strconv"
 )
 
 const (
@@ -145,6 +146,21 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 	return hashedImageName, nil
 }
 
+func getItemById(c echo.Context) error {
+	id := c.Param("id")
+	itemID, err := strconv.Atoi(id)
+	if err != nil {
+		res := Response{Message: "Invalid item ID"}
+		return c.JSON(http.StatusBadRequest, res)
+	}
+	if itemID < 1 || itemID > len(Items.Items) {
+		res := Response{Message: "Item not found"}
+		return c.JSON(http.StatusNotFound, res)
+	}
+	item := Items.Items[itemID-1]
+	return c.JSON(http.StatusOK, item)
+}
+
 // decodeItems は items.json ファイルをデコードする関数
 func decodeItems() error {
 	file, err := os.OpenFile(ItemsFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -202,6 +218,7 @@ func main() {
 	e.GET("/", root)
 	e.POST("/items", addItem)
 	e.GET("/items", getItems)
+	e.GET("/items/:id", getItemById)
 	e.GET("/image/:imageFilename", getImg)
 
 
