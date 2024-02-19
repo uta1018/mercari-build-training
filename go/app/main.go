@@ -203,7 +203,7 @@ func main() {
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-	e.Logger.SetLevel(log.INFO)
+	e.Logger.SetLevel(log.DEBUG)
 
 	frontURL := os.Getenv("FRONT_URL")
 	if frontURL == "" {
