@@ -13,6 +13,8 @@ import (
 
 	"encoding/json"
 	"io"
+	"crypto/sha256"
+	"mime/multipart"
 )
 
 const (
@@ -27,6 +29,7 @@ type Response struct {
 type Item struct {
 	Name string `json:"name"`
 	Category string `json:"category"`
+	ImageName string `json:"image-name"`
 }
 
 var Items struct {
@@ -43,6 +46,18 @@ func addItem(c echo.Context) error {
 	name := c.FormValue("name")
 	category := c.FormValue("category")
 
+	// 画像ファイルの保存
+	imageFile, err := c.FormFile("image")
+	if err != nil {
+			res := Response{Message: "Error uploading image"}
+			return c.JSON(http.StatusInternalServerError, res)
+	}
+	imageName, err := saveImage(imageFile)
+	if err != nil {
+			res := Response{Message: "Error saving image"}
+			return c.JSON(http.StatusInternalServerError, res)
+	}
+
 	// items.jsonのデータを構造体にデコード
 	if err := decodeItems(); err != nil {
 		res := Response{Message: "Error decoding JSON"}
@@ -50,7 +65,7 @@ func addItem(c echo.Context) error {
 	}
 
 	// 新しい商品情報を追加
-	newItem := Item{Name: name, Category: category}
+	newItem := Item{Name: name, Category: category, ImageName: imageName}
 	Items.Items = append(Items.Items, newItem)
 
 	// 更新した内容をエンコードしてファイルに書き込む
@@ -95,6 +110,41 @@ func getImg(c echo.Context) error {
 	return c.File(imgPath)
 }
 
+// saveImage は画像を保存し、ハッシュ化した名前を返す関数
+func saveImage(file *multipart.FileHeader) (string, error) {
+	// 元ファイルを開く
+	src, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
+	// 元ファイルのハッシュを計算
+	hash := sha256.New()
+	if _, err := io.Copy(hash, src); err != nil {
+		return "", err
+	}
+
+	// ハッシュを16進数文字列に変換
+	hashString := hash.Sum(nil)
+
+	// 行先ファイルを作成
+	hashedImageName := fmt.Sprintf("%x.jpeg", hashString)
+	dst, err := os.Create(path.Join(ImgDir, hashedImageName))
+	if err != nil {
+		return "", err
+	}
+	defer dst.Close()
+
+	// 元ファイルを読み込み、行先ファイルに保存
+	src.Seek(0, 0) 
+	if _, err := io.Copy(dst, src); err != nil {
+		return "", err
+	}
+
+	return hashedImageName, nil
+}
+
 // decodeItems は items.json ファイルをデコードする関数
 func decodeItems() error {
 	file, err := os.OpenFile(ItemsFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
@@ -119,6 +169,7 @@ func encodeItems() error {
 	}
 	defer file.Close()
 
+	// ポインタを先頭に戻す
 	file.Seek(0, 0)
 	file.Truncate(0)
 
