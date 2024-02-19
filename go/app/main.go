@@ -33,7 +33,7 @@ type Item struct {
 	ImageName string `json:"image-name"`
 }
 
-var Items struct {
+type Items struct {
 	Items []Item `json:"items"`
 }
 
@@ -60,17 +60,18 @@ func addItem(c echo.Context) error {
 	}
 
 	// items.jsonのデータを構造体にデコード
-	if err := decodeItems(); err != nil {
+	items, err := decodeItems()
+	if err != nil {
 		res := Response{Message: "Error decoding JSON"}
 		return c.JSON(http.StatusInternalServerError, res)
 	}
 
 	// 新しい商品情報を追加
 	newItem := Item{Name: name, Category: category, ImageName: imageName}
-	Items.Items = append(Items.Items, newItem)
+	items.Items = append(items.Items, newItem)
 
 	// 更新した内容をエンコードしてファイルに書き込む
-	if err := encodeItems(); err != nil {
+	if err := encodeItems(items); err != nil {
 		res := Response{Message: "Error encoding JSON"}
 		return c.JSON(http.StatusInternalServerError, res)
 	}
@@ -86,14 +87,15 @@ func addItem(c echo.Context) error {
 
 func getItems(c echo.Context) error {
 	// items.jsonのデータを構造体にデコード
-	if err := decodeItems(); err != nil {
+	items, err := decodeItems()
+	if err != nil {
 		res := Response{Message: "Error decoding JSON"}
 		return c.JSON(http.StatusInternalServerError, res)
 	}
 	
 	// ログとJSONレスポンスの作成
 	c.Logger().Info("Retrieved items")
-	return c.JSON(http.StatusOK, Items)
+	return c.JSON(http.StatusOK, items)
 }
 
 func getImg(c echo.Context) error {
@@ -153,32 +155,40 @@ func getItemById(c echo.Context) error {
 		res := Response{Message: "Invalid item ID"}
 		return c.JSON(http.StatusBadRequest, res)
 	}
-	if itemID < 1 || itemID > len(Items.Items) {
+
+	items, err := decodeItems()
+	if err != nil {
+		res := Response{Message: "Error decoding JSON"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	
+	if itemID < 1 || itemID > len(items.Items) {
 		res := Response{Message: "Item not found"}
 		return c.JSON(http.StatusNotFound, res)
 	}
-	item := Items.Items[itemID-1]
+	item := items.Items[itemID-1]
 	return c.JSON(http.StatusOK, item)
 }
 
 // decodeItems は items.json ファイルをデコードする関数
-func decodeItems() error {
+func decodeItems() (*Items, error) {
 	file, err := os.OpenFile(ItemsFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
+	var items Items
 	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&Items); err != nil && err != io.EOF {
-		return err
+	if err := decoder.Decode(&items); err != nil && err != io.EOF {
+		return nil, err
 	}
 
-	return nil
+	return &items, nil
 }
 
 // encodeItems は items.json ファイルにエンコードする関数
-func encodeItems() error {
+func encodeItems(items *Items) error {
 	file, err := os.OpenFile(ItemsFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		return err
@@ -190,7 +200,7 @@ func encodeItems() error {
 	file.Truncate(0)
 
 	encoder := json.NewEncoder(file)
-	if err := encoder.Encode(Items); err != nil {
+	if err := encoder.Encode(items); err != nil {
 		return err
 	}
 
