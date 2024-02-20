@@ -16,6 +16,7 @@ import (
 	"crypto/sha256"
 	"mime/multipart"
 	"strconv"
+	// "errors"
 )
 
 const (
@@ -198,11 +199,8 @@ func encodeItems(items *Items) error {
 	// ポインタを先頭に戻す
 	file.Seek(0, 0)
 	file.Truncate(0)
-
-	encoder := json.NewEncoder(file)
-	if err := encoder.Encode(items); err != nil {
-		return err
-	}
+	
+	json.NewEncoder(file).Encode(items)
 
 	return nil
 }
