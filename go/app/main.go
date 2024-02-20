@@ -199,8 +199,10 @@ func encodeItems(items *Items) error {
 	// ポインタを先頭に戻す
 	file.Seek(0, 0)
 	file.Truncate(0)
-	
-	json.NewEncoder(file).Encode(items)
+
+	if err := json.NewEncoder(file).Encode(&items); err!= nil {
+		return err
+	}
 
 	return nil
 }
