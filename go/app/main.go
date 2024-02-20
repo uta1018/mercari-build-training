@@ -22,6 +22,7 @@ import (
 const (
 	ImgDir = "images"
 	ItemsFilePath = "./items.json"
+	DbFilePath = "../db/mercari.sqlite3"
 )
 
 type Response struct {
@@ -62,7 +63,7 @@ func addItem(c echo.Context) error {
 	}
 
 	// DBとの接続
-	db, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
+	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
 		res := Response{Message: "Error connecting to the database"}
     return c.JSON(http.StatusInternalServerError, res)
@@ -94,7 +95,7 @@ func addItem(c echo.Context) error {
 
 func getItems(c echo.Context) error {
 	// DBとの接続
-	db, err := sql.Open("sqlite3", "../db/mercari.sqlite3")
+	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
 		res := Response{Message: "Error connecting to the database"}
     return c.JSON(http.StatusInternalServerError, res)
@@ -126,6 +127,42 @@ func getItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
+func searchItems(c echo.Context) error {
+	// DBとの接続
+	db, err := sql.Open("sqlite3", DbFilePath)
+	if err != nil {
+		res := Response{Message: "Error connecting to the database"}
+    return c.JSON(http.StatusInternalServerError, res)
+	}
+	defer db.Close()
+
+	// クエリパラメータを受け取る
+	keyword := c.QueryParam("keyword")
+
+	// データの読み込み
+	rows, err := db.Query("SELECT name, category, image_name FROM items  WHERE name LIKE '%' || ? || '%'", keyword)
+	if err != nil {
+		res := Response{Message: "Error querying items from the database"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	defer rows.Close()
+
+	var items Items
+
+	for rows.Next() {
+		var item Item
+		err := rows.Scan(&item.Name, &item.Category, &item.ImageName)
+		if err != nil {
+			res := Response{Message: "Error scanning rows"}
+			return c.JSON(http.StatusInternalServerError, res)
+		}
+		items.Items = append(items.Items, item)
+	}
+
+	// ログとJSONレスポンスの作成
+	c.Logger().Info("Retrieved items")
+	return c.JSON(http.StatusOK, items)
+}
 
 func getImg(c echo.Context) error {
 	// Create image path
@@ -223,6 +260,7 @@ func main() {
 	e.GET("/", root)
 	e.POST("/items", addItem)
 	e.GET("/items", getItems)
+	e.GET("/search", searchItems)
 	// e.GET("/items/:id", getItemById)
 	e.GET("/image/:imageFilename", getImg)
 
