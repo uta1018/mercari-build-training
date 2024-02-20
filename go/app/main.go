@@ -31,7 +31,7 @@ type Response struct {
 type Item struct {
 	Name string `json:"name"`
 	Category string `json:"category"`
-	ImageName string `json:"image-name"`
+	ImageName string `json:"image_name"`
 }
 
 type Items struct {
