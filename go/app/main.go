@@ -70,15 +70,31 @@ func addItem(c echo.Context) error {
 	}
 	defer db.Close()
 
+	// カテゴリが存在するか調べる
+	var categoryID int64
+	err = db.QueryRow("SELECT id FROM categories WHERE name = ?", category).Scan(&categoryID)
+	// カテゴリが存在しない場合、新しいカテゴリを追加
+	if err == sql.ErrNoRows {
+			result, err := db.Exec("INSERT INTO categories (name) VALUES (?)", category)
+			if err != nil {
+				res := Response{Message: "Error adding new category to the database"}
+				return c.JSON(http.StatusInternalServerError, res)
+			}
+			categoryID, _ = result.LastInsertId()
+	} else if err != nil {
+		res := Response{Message: "Error querying categories from the database"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	
 	// dbに保存
-	stmt, err := db.Prepare("INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)")
+	stmt, err := db.Prepare("INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)")
 	if err != nil {
 			res := Response{Message: "Error preparing statement for database insertion"}
 			return c.JSON(http.StatusInternalServerError, res)
 	}
 	defer stmt.Close()
 
-	_, err = stmt.Exec(name, category, imageName)
+	_, err = stmt.Exec(name, categoryID, imageName)
 	if err != nil {
 			res := Response{Message: "Error saving item to database"}
 			return c.JSON(http.StatusInternalServerError, res)
@@ -103,7 +119,7 @@ func getItems(c echo.Context) error {
 	defer db.Close()
 
 	// データの読み込み
-	rows, err := db.Query("SELECT name, category, image_name FROM items")
+	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
 	if err != nil {
 		res := Response{Message: "Error querying items from the database"}
 		return c.JSON(http.StatusInternalServerError, res)
@@ -140,7 +156,7 @@ func searchItems(c echo.Context) error {
 	keyword := c.QueryParam("keyword")
 
 	// データの読み込み
-	rows, err := db.Query("SELECT name, category, image_name FROM items  WHERE name LIKE '%' || ? || '%'", keyword)
+	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.name LIKE '%' || ? || '%'", keyword)
 	if err != nil {
 		res := Response{Message: "Error querying items from the database"}
 		return c.JSON(http.StatusInternalServerError, res)
