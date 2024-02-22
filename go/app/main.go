@@ -41,8 +41,7 @@ type Items struct {
 }
 
 func root(c echo.Context) error {
-	res := Response{Message: "Hello, world!"}
-	return c.JSON(http.StatusOK, res)
+	return echo.NewHTTPError(http.StatusOK, "Hello, world!")
 }
 
 func addItem(c echo.Context) error {
@@ -54,21 +53,21 @@ func addItem(c echo.Context) error {
 	// 画像ファイルの保存
 	imageFile, err := c.FormFile("image")
 	if err != nil {
-			res := Response{Message: "Error uploading image"}
-			return c.JSON(http.StatusInternalServerError, res)
+			c.Logger().Errorf("Error uploading image: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error uploading image")
 	}
 	imageName, err := saveImage(imageFile)
 	if err != nil {
-			res := Response{Message: "Error saving image"}
-			return c.JSON(http.StatusInternalServerError, res)
+			c.Logger().Errorf("Error saving image: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error saving image")
 	}
 
 
 	// DBとの接続
 	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
-		res := Response{Message: "Error connecting to the database"}
-    return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error connecting to the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
 	}
 	defer db.Close()
 
@@ -76,8 +75,8 @@ func addItem(c echo.Context) error {
 	// トランザクション開始
 	tx, err := db.Begin()
 	if err != nil {
-		res := Response{Message: "Error starting database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error starting database transactione: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
 	}
 	defer tx.Rollback()
 	
@@ -89,35 +88,35 @@ func addItem(c echo.Context) error {
 	if err == sql.ErrNoRows {
 			result, err := db.Exec("INSERT INTO categories (name) VALUES (?)", category)
 			if err != nil {
-				res := Response{Message: "Error adding new category to the database"}
-				return c.JSON(http.StatusInternalServerError, res)
+				c.Logger().Errorf("Error adding new category to the database: %v", err)
+				return echo.NewHTTPError(http.StatusInternalServerError, "Error adding new category to the database")
 			}
 			categoryID, _ = result.LastInsertId()
 	} else if err != nil {
-		res := Response{Message: "Error querying categories from the database"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error querying categories from the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying categories from the database")
 	}
 	
 
 	// dbに保存
 	stmt, err := db.Prepare("INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)")
 	if err != nil {
-			res := Response{Message: "Error preparing statement for database insertion"}
-			return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error preparing statement for database insertion: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error preparing statement for database insertion")
 	}
 	defer stmt.Close()
 
 	_, err = stmt.Exec(name, categoryID, imageName)
 	if err != nil {
-			res := Response{Message: "Error saving item to database"}
-			return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error saving item to database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error saving item to database")
 	}
 
 
 	// トランザクションコミット
 	if err := tx.Commit(); err != nil {
-		res := Response{Message: "Error committing database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error committing database transaction: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 	
 
@@ -133,24 +132,24 @@ func getItems(c echo.Context) error {
 	// DBとの接続
 	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
-		res := Response{Message: "Error connecting to the database"}
-    return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error connecting to the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
 	}
 	defer db.Close()
 
 	// トランザクション開始
 	tx, err := db.Begin()
 	if err != nil {
-		res := Response{Message: "Error starting database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error starting database transactione: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
 	}
 	defer tx.Rollback()
 
 	// データの読み込み
 	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
 	if err != nil {
-		res := Response{Message: "Error querying items from the database"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error querying items from the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
 	}
 	defer rows.Close()
 
@@ -160,16 +159,16 @@ func getItems(c echo.Context) error {
 		var item Item
 		err := rows.Scan(&item.Name, &item.Category, &item.ImageName)
 		if err != nil {
-			res := Response{Message: "Error scanning rows"}
-			return c.JSON(http.StatusInternalServerError, res)
+			c.Logger().Errorf("Error scanning rows: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error scanning rows")
 		}
 		items.Items = append(items.Items, item)
 	}
 
 	// トランザクションコミット
 	if err := tx.Commit(); err != nil {
-		res := Response{Message: "Error committing database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error committing database transaction: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 
 	// ログとJSONレスポンスの作成
@@ -181,16 +180,16 @@ func searchItems(c echo.Context) error {
 	// DBとの接続
 	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
-		res := Response{Message: "Error connecting to the database"}
-    return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error connecting to the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
 	}
 	defer db.Close()
 
 	// トランザクション開始
 	tx, err := db.Begin()
 	if err != nil {
-		res := Response{Message: "Error starting database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error starting database transactione: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
 	}
 	defer tx.Rollback()
 
@@ -200,8 +199,8 @@ func searchItems(c echo.Context) error {
 	// データの読み込み
 	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.name LIKE '%' || ? || '%'", keyword)
 	if err != nil {
-		res := Response{Message: "Error querying items from the database"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error querying items from the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
 	}
 	defer rows.Close()
 
@@ -211,16 +210,16 @@ func searchItems(c echo.Context) error {
 		var item Item
 		err := rows.Scan(&item.Name, &item.Category, &item.ImageName)
 		if err != nil {
-			res := Response{Message: "Error scanning rows"}
-			return c.JSON(http.StatusInternalServerError, res)
+			c.Logger().Errorf("Error scanning rows: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error scanning rows")
 		}
 		items.Items = append(items.Items, item)
 	}
 
 	// トランザクションコミット
 	if err := tx.Commit(); err != nil {
-		res := Response{Message: "Error committing database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error committing database transaction: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 
 	// ログとJSONレスポンスの作成
@@ -233,8 +232,8 @@ func getImg(c echo.Context) error {
 	imgPath := path.Join(ImgDir, c.Param("imageFilename"))
 
 	if !strings.HasSuffix(imgPath, ".jpg") {
-		res := Response{Message: "Image path does not end with .jpg"}
-		return c.JSON(http.StatusBadRequest, res)
+		c.Logger().Error("Image path does not end with .jpg")
+		return echo.NewHTTPError(http.StatusInternalServerError, "Image path does not end with .jpg")
 	}
 	if _, err := os.Stat(imgPath); err != nil {
 		c.Logger().Debugf("Image not found: %s", imgPath)
@@ -283,24 +282,24 @@ func getItemById(c echo.Context) error {
   // DBとの接続
 	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
-		res := Response{Message: "Error connecting to the database"}
-    return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error connecting to the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
 	}
 	defer db.Close()
 
 	// トランザクション開始
 	tx, err := db.Begin()
 	if err != nil {
-		res := Response{Message: "Error starting database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error starting database transactione: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
 	}
 	defer tx.Rollback()
 
 	id := c.Param("id")
 	itemID, err := strconv.Atoi(id)
 	if err != nil {
-		res := Response{Message: "Invalid item ID"}
-		return c.JSON(http.StatusBadRequest, res)
+		c.Logger().Errorf("Invalid item ID: %v", err)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid item ID")
 	}
 	var item Item
 
@@ -309,17 +308,17 @@ func getItemById(c echo.Context) error {
 	err = row.Scan(&item.Name, &item.Category, &item.ImageName)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			res := Response{Message: "Item not found"}
-			return c.JSON(http.StatusNotFound, res)
+			c.Logger().Errorf("Item not found: %v", err)
+			return echo.NewHTTPError(http.StatusNotFound, "Item not found")
 		}
-		res := Response{Message: "Error querying items from the database"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error querying items from the database: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
 	}
 
 	// トランザクションコミット
 	if err := tx.Commit(); err != nil {
-		res := Response{Message: "Error committing database transaction"}
-		return c.JSON(http.StatusInternalServerError, res)
+		c.Logger().Errorf("Error committing database transaction: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 
 	// ログとJSONレスポンスの作成
