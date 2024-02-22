@@ -14,9 +14,10 @@ import (
 	"io"
 	"crypto/sha256"
 	"mime/multipart"
-	// "strconv"
+	"strconv"
 	"database/sql"
 	_ "github.com/mattn/go-sqlite3"
+	"errors"
 )
 
 const (
@@ -278,27 +279,53 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 }
 
 
-// func getItemById(c echo.Context) error {
-// 	id := c.Param("id")
-// 	itemID, err := strconv.Atoi(id)
-// 	if err != nil {
-// 		res := Response{Message: "Invalid item ID"}
-// 		return c.JSON(http.StatusBadRequest, res)
-// 	}
+func getItemById(c echo.Context) error {
+  // DBとの接続
+	db, err := sql.Open("sqlite3", DbFilePath)
+	if err != nil {
+		res := Response{Message: "Error connecting to the database"}
+    return c.JSON(http.StatusInternalServerError, res)
+	}
+	defer db.Close()
 
-// 	items, err := decodeItems()
-// 	if err != nil {
-// 		res := Response{Message: "Error decoding JSON"}
-// 		return c.JSON(http.StatusInternalServerError, res)
-// 	}
-	
-// 	if itemID < 1 || itemID > len(items.Items) {
-// 		res := Response{Message: "Item not found"}
-// 		return c.JSON(http.StatusNotFound, res)
-// 	}
-// 	item := items.Items[itemID-1]
-// 	return c.JSON(http.StatusOK, item)
-// }
+	// トランザクション開始
+	tx, err := db.Begin()
+	if err != nil {
+		res := Response{Message: "Error starting database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	defer tx.Rollback()
+
+	id := c.Param("id")
+	itemID, err := strconv.Atoi(id)
+	if err != nil {
+		res := Response{Message: "Invalid item ID"}
+		return c.JSON(http.StatusBadRequest, res)
+	}
+	var item Item
+
+	// データの読み込み
+	row := tx.QueryRow("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.id = ?", itemID)
+	err = row.Scan(&item.Name, &item.Category, &item.ImageName)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			res := Response{Message: "Item not found"}
+			return c.JSON(http.StatusNotFound, res)
+		}
+		res := Response{Message: "Error querying items from the database"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+
+	// トランザクションコミット
+	if err := tx.Commit(); err != nil {
+		res := Response{Message: "Error committing database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+
+	// ログとJSONレスポンスの作成
+	c.Logger().Info("Retrieved items")
+	return c.JSON(http.StatusOK, item)
+}
 
 
 func main() {
@@ -324,7 +351,7 @@ func main() {
 	e.POST("/items", addItem)
 	e.GET("/items", getItems)
 	e.GET("/search", searchItems)
-	// e.GET("/items/:id", getItemById)
+	e.GET("/items/:id", getItemById)
 	e.GET("/image/:imageFilename", getImg)
 
 
