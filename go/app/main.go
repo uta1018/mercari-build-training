@@ -44,11 +44,11 @@ func root(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-
 func addItem(c echo.Context) error {
 	// Get form data
 	name := c.FormValue("name")
 	category := c.FormValue("category")
+
 
 	// 画像ファイルの保存
 	imageFile, err := c.FormFile("image")
@@ -62,6 +62,7 @@ func addItem(c echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, res)
 	}
 
+
 	// DBとの接続
 	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
@@ -69,6 +70,16 @@ func addItem(c echo.Context) error {
     return c.JSON(http.StatusInternalServerError, res)
 	}
 	defer db.Close()
+
+
+	// トランザクション開始
+	tx, err := db.Begin()
+	if err != nil {
+		res := Response{Message: "Error starting database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	defer tx.Rollback()
+	
 
 	// カテゴリが存在するか調べる
 	var categoryID int64
@@ -86,6 +97,7 @@ func addItem(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, res)
 	}
 	
+
 	// dbに保存
 	stmt, err := db.Prepare("INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)")
 	if err != nil {
@@ -99,7 +111,15 @@ func addItem(c echo.Context) error {
 			res := Response{Message: "Error saving item to database"}
 			return c.JSON(http.StatusInternalServerError, res)
 	}
+
+
+	// トランザクションコミット
+	if err := tx.Commit(); err != nil {
+		res := Response{Message: "Error committing database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
 	
+
 	// ログとJSONレスポンスの作成
 	c.Logger().Infof("Received item: %s, Category: %s", name, category)
 	message := fmt.Sprintf("item received: %s", name)
@@ -107,7 +127,6 @@ func addItem(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, res)
 }
-
 
 func getItems(c echo.Context) error {
 	// DBとの接続
@@ -117,6 +136,14 @@ func getItems(c echo.Context) error {
     return c.JSON(http.StatusInternalServerError, res)
 	}
 	defer db.Close()
+
+	// トランザクション開始
+	tx, err := db.Begin()
+	if err != nil {
+		res := Response{Message: "Error starting database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	defer tx.Rollback()
 
 	// データの読み込み
 	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
@@ -138,6 +165,12 @@ func getItems(c echo.Context) error {
 		items.Items = append(items.Items, item)
 	}
 
+	// トランザクションコミット
+	if err := tx.Commit(); err != nil {
+		res := Response{Message: "Error committing database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+
 	// ログとJSONレスポンスの作成
 	c.Logger().Info("Retrieved items")
 	return c.JSON(http.StatusOK, items)
@@ -151,6 +184,14 @@ func searchItems(c echo.Context) error {
     return c.JSON(http.StatusInternalServerError, res)
 	}
 	defer db.Close()
+
+	// トランザクション開始
+	tx, err := db.Begin()
+	if err != nil {
+		res := Response{Message: "Error starting database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	defer tx.Rollback()
 
 	// クエリパラメータを受け取る
 	keyword := c.QueryParam("keyword")
@@ -173,6 +214,12 @@ func searchItems(c echo.Context) error {
 			return c.JSON(http.StatusInternalServerError, res)
 		}
 		items.Items = append(items.Items, item)
+	}
+
+	// トランザクションコミット
+	if err := tx.Commit(); err != nil {
+		res := Response{Message: "Error committing database transaction"}
+		return c.JSON(http.StatusInternalServerError, res)
 	}
 
 	// ログとJSONレスポンスの作成
