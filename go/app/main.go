@@ -85,7 +85,7 @@ func addItem(c echo.Context) error {
 	var categoryID int64
 	err = db.QueryRow("SELECT id FROM categories WHERE name = ?", category).Scan(&categoryID)
 	// カテゴリが存在しない場合、新しいカテゴリを追加
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 			result, err := db.Exec("INSERT INTO categories (name) VALUES (?)", category)
 			if err != nil {
 				c.Logger().Errorf("Error adding new category to the database: %v", err)
@@ -277,7 +277,6 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 	return hashedImageName, nil
 }
 
-
 func getItemById(c echo.Context) error {
   // DBとの接続
 	db, err := sql.Open("sqlite3", DbFilePath)
@@ -325,7 +324,6 @@ func getItemById(c echo.Context) error {
 	c.Logger().Info("Retrieved items")
 	return c.JSON(http.StatusOK, item)
 }
-
 
 func main() {
 	e := echo.New()
