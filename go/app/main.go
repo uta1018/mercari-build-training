@@ -83,10 +83,10 @@ func addItem(c echo.Context) error {
 
 	// カテゴリが存在するか調べる
 	var categoryID int64
-	err = db.QueryRow("SELECT id FROM categories WHERE name = ?", category).Scan(&categoryID)
+	err = tx.QueryRow("SELECT id FROM categories WHERE name = ?", category).Scan(&categoryID)
 	// カテゴリが存在しない場合、新しいカテゴリを追加
 	if errors.Is(err, sql.ErrNoRows) {
-			result, err := db.Exec("INSERT INTO categories (name) VALUES (?)", category)
+			result, err := tx.Exec("INSERT INTO categories (name) VALUES (?)", category)
 			if err != nil {
 				c.Logger().Errorf("Error adding new category to the database: %v", err)
 				return echo.NewHTTPError(http.StatusInternalServerError, "Error adding new category to the database")
@@ -99,7 +99,7 @@ func addItem(c echo.Context) error {
 	
 
 	// dbに保存
-	stmt, err := db.Prepare("INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)")
 	if err != nil {
 		c.Logger().Errorf("Error preparing statement for database insertion: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error preparing statement for database insertion")
@@ -137,14 +137,6 @@ func getItems(c echo.Context) error {
 	}
 	defer db.Close()
 
-	// トランザクション開始
-	tx, err := db.Begin()
-	if err != nil {
-		c.Logger().Errorf("Error starting database transactione: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
-	}
-	defer tx.Rollback()
-
 	// データの読み込み
 	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
 	if err != nil {
@@ -165,12 +157,6 @@ func getItems(c echo.Context) error {
 		items.Items = append(items.Items, item)
 	}
 
-	// トランザクションコミット
-	if err := tx.Commit(); err != nil {
-		c.Logger().Errorf("Error committing database transaction: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
-	}
-
 	// ログとJSONレスポンスの作成
 	c.Logger().Info("Retrieved items")
 	return c.JSON(http.StatusOK, items)
@@ -184,14 +170,6 @@ func searchItems(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
 	}
 	defer db.Close()
-
-	// トランザクション開始
-	tx, err := db.Begin()
-	if err != nil {
-		c.Logger().Errorf("Error starting database transactione: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
-	}
-	defer tx.Rollback()
 
 	// クエリパラメータを受け取る
 	keyword := c.QueryParam("keyword")
@@ -214,12 +192,6 @@ func searchItems(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, "Error scanning rows")
 		}
 		items.Items = append(items.Items, item)
-	}
-
-	// トランザクションコミット
-	if err := tx.Commit(); err != nil {
-		c.Logger().Errorf("Error committing database transaction: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 
 	// ログとJSONレスポンスの作成
@@ -286,14 +258,6 @@ func getItemById(c echo.Context) error {
 	}
 	defer db.Close()
 
-	// トランザクション開始
-	tx, err := db.Begin()
-	if err != nil {
-		c.Logger().Errorf("Error starting database transactione: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
-	}
-	defer tx.Rollback()
-
 	id := c.Param("id")
 	itemID, err := strconv.Atoi(id)
 	if err != nil {
@@ -303,7 +267,7 @@ func getItemById(c echo.Context) error {
 	var item Item
 
 	// データの読み込み
-	row := tx.QueryRow("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.id = ?", itemID)
+	row := db.QueryRow("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.id = ?", itemID)
 	err = row.Scan(&item.Name, &item.Category, &item.ImageName)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -312,12 +276,6 @@ func getItemById(c echo.Context) error {
 		}
 		c.Logger().Errorf("Error querying items from the database: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
-	}
-
-	// トランザクションコミット
-	if err := tx.Commit(); err != nil {
-		c.Logger().Errorf("Error committing database transaction: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 
 	// ログとJSONレスポンスの作成
