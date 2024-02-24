@@ -22,8 +22,7 @@ import (
 
 const (
 	ImgDir = "images"
-	ItemsFilePath = "./items.json"
-	DbFilePath = "../db/mercari.sqlite3"
+	DbFilePath = "./db/mercari.sqlite3"
 )
 
 type Response struct {
