@@ -15,9 +15,15 @@ COPY . .
 # dbディレクトリ内の複数ファイルの所有者を変更
 RUN chown -R trainee:mercari db
 
-RUN go mod tidy
+# imagesディレクトリ内の複数ファイルの所有者を変更
+RUN chown -R trainee:mercari images
 
-# USER trainee
+# go.modファイルの所有者を変更
+RUN chown trainee:mercari go.mod
+
+USER trainee
+
+RUN go mod tidy
 
 # docker起動時にapp/mainを実行
 CMD ["go", "run", "app/main.go"]
