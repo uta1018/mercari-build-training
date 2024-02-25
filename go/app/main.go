@@ -78,8 +78,11 @@ func addItem(c echo.Context) error {
 		c.Logger().Errorf("Error starting database transactione: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
 	}
-	defer tx.Rollback()
-	
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			c.Logger().Errorf("Database transaction rollback failed: %v", err)
+		}
+	}()
 
 	// カテゴリが存在するか調べる
 	var categoryID int64
