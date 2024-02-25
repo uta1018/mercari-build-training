@@ -138,7 +138,7 @@ func getItems(c echo.Context) error {
 	defer db.Close()
 
 	// データの読み込み
-	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
+	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id")
 	if err != nil {
 		c.Logger().Errorf("Error querying items from the database: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
