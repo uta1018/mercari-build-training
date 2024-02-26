@@ -23,8 +23,8 @@ import (
 const (
 	ImgDir = "images"
 	DbFilePath = "./db/mercari.sqlite3"
-	ItemsShemaPath = "./db/items.db"
-	CategoriesShemaPath = "./db/categories.db"
+	ItemsSchemaPath = "./db/items.db"
+	CategoriesSchemaPath = "./db/categories.db"
 )
 
 type Response struct {
@@ -255,6 +255,29 @@ func  (s ServerImpl) getItemById(c echo.Context) error {
 	return c.JSON(http.StatusOK, item)
 }
 
+func  (s ServerImpl) createTables() error {
+	// ItemsSchema読み込み
+	itemsSchema, err := os.ReadFile(ItemsSchemaPath)
+	if err != nil {
+		return fmt.Errorf("Error reading Items schema file: %v", err)
+	}
+	// CategoriesSchema読み込み
+	categoriesSchema, err := os.ReadFile(CategoriesSchemaPath)
+	if err != nil {
+		return fmt.Errorf("Error reading Categories schema file: %v", err)
+	}
+	// Itemsテーブル作成
+	if _, err := s.db.Exec(string(itemsSchema)); err != nil {
+		return fmt.Errorf("Error creating Items table: %v", err)
+	}
+	// Categoriesテーブル作成
+	if _, err := s.db.Exec(string(categoriesSchema)); err != nil {
+		return fmt.Errorf("Error creating Categories table: %v", err)
+	}
+
+	return nil
+}
+
 func main() {
 	e := echo.New()
 
@@ -282,6 +305,10 @@ func main() {
 
 	serverImpl := ServerImpl{db: db}
 
+	// テーブルの作成
+	if err := serverImpl.createTables(); err != nil {
+		e.Logger.Errorf("Failed to create tables: %v", err)
+	}
 
 	// Routes
 	e.GET("/", root)
