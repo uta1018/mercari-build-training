@@ -2,6 +2,7 @@ name: build
 run-name: ${{ github.actor }} is building ${{ github.ref_name }} 🚀
 on: [push]
 
+# 変数を定義
 env:
  REGISTRY: ghcr.io
  IMAGE_NAME: ${{ github.repository }}
