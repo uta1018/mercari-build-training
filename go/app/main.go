@@ -36,6 +36,7 @@ type ServerImpl struct {
 }
 
 type Item struct {
+	Id int `json:"id"`
 	Name string `json:"name"`
 	Category string `json:"category"`
 	ImageName string `json:"image_name"`
@@ -126,7 +127,7 @@ func (s ServerImpl) addItem(c echo.Context) error {
 
 func  (s ServerImpl) getItems(c echo.Context) error {
 	// データの読み込み
-	rows, err := s.db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
+	rows, err := s.db.Query("SELECT items.id, items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
 	if err != nil {
 		c.Logger().Errorf("Error querying items from the database: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
@@ -137,7 +138,7 @@ func  (s ServerImpl) getItems(c echo.Context) error {
 
 	for rows.Next() {
 		var item Item
-		err := rows.Scan(&item.Name, &item.Category, &item.ImageName)
+		err := rows.Scan(&item.Id, &item.Name, &item.Category, &item.ImageName)
 		if err != nil {
 			c.Logger().Errorf("Error scanning rows: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "Error scanning rows")
@@ -155,7 +156,7 @@ func  (s ServerImpl) searchItems(c echo.Context) error {
 	keyword := c.QueryParam("keyword")
 
 	// データの読み込み
-	rows, err := s.db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.name LIKE '%' || ? || '%'", keyword)
+	rows, err := s.db.Query("SELECT items.id, items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.name LIKE '%' || ? || '%'", keyword)
 	if err != nil {
 		c.Logger().Errorf("Error querying items from the database: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
@@ -166,7 +167,7 @@ func  (s ServerImpl) searchItems(c echo.Context) error {
 
 	for rows.Next() {
 		var item Item
-		err := rows.Scan(&item.Name, &item.Category, &item.ImageName)
+		err := rows.Scan(&item.Id, &item.Name, &item.Category, &item.ImageName)
 		if err != nil {
 			c.Logger().Errorf("Error scanning rows: %v", err)
 			return echo.NewHTTPError(http.StatusInternalServerError, "Error scanning rows")
@@ -179,14 +180,35 @@ func  (s ServerImpl) searchItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
-func getImg(c echo.Context) error {
-	// Create image path
-	imgPath := path.Join(ImgDir, c.Param("imageFilename"))
+func  (s ServerImpl) getImg(c echo.Context) error {
+	// id+.jpgが渡ってくる
+	imageIDWithExtension := c.Param("imageFilename")
+	imgPath := path.Join(ImgDir, imageIDWithExtension)
 
+	// 拡張子がjpgがチェック
 	if !strings.HasSuffix(imgPath, ".jpg") {
 		c.Logger().Error("Image path does not end with .jpg")
 		return echo.NewHTTPError(http.StatusInternalServerError, "Image path does not end with .jpg")
 	}
+
+	// 拡張子を取り除く
+	imageID := strings.TrimSuffix(imageIDWithExtension, ".jpg")
+	
+	// imageIDを使ってデータベースに問い合わせて、該当する画像のパスを取得する
+	var imgPathById string
+	err := s.db.QueryRow("SELECT image_name FROM items WHERE id = ?", imageID).Scan(&imgPathById)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			c.Logger().Errorf("Image not found for ID: %s", imageID)
+		} else {
+			c.Logger().Errorf("Error querying image path from the database: %v", err)
+		}
+		imgPath = path.Join(ImgDir, "default.jpg")
+	} else {
+		imgPath = path.Join(ImgDir, imgPathById)
+	}
+
+	// ファイルが存在しないときはデフォルトを表示
 	if _, err := os.Stat(imgPath); err != nil {
 		c.Logger().Debugf("Image not found: %s", imgPath)
 		imgPath = path.Join(ImgDir, "default.jpg")
@@ -239,8 +261,8 @@ func  (s ServerImpl) getItemById(c echo.Context) error {
 	var item Item
 
 	// データの読み込み
-	row := s.db.QueryRow("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.id = ?", itemID)
-	err = row.Scan(&item.Name, &item.Category, &item.ImageName)
+	row := s.db.QueryRow("SELECT items.id, items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.id = ?", itemID)
+	err = row.Scan(&item.Id, &item.Name, &item.Category, &item.ImageName)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			c.Logger().Errorf("Item not found: %v", err)
@@ -316,7 +338,7 @@ func main() {
 	e.GET("/items", serverImpl.getItems)
 	e.GET("/search", serverImpl.searchItems)
 	e.GET("/items/:id", serverImpl.getItemById)
-	e.GET("/image/:imageFilename", getImg)
+	e.GET("/image/:imageFilename", serverImpl.getImg)
 
 
 	// Start server
