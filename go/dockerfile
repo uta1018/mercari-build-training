@@ -23,7 +23,7 @@ RUN chown trainee:mercari go.mod
 
 USER trainee
 
-RUN go mod tidy
+RUN go mod download
 
 # docker起動時にapp/mainを実行
 CMD ["go", "run", "app/main.go"]
