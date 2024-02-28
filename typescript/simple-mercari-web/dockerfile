@@ -1,7 +1,15 @@
 FROM node:20-alpine
-WORKDIR /app
 
 RUN addgroup -S mercari && adduser -S trainee -G mercari
+
+WORKDIR /app
+
+COPY . .
+
+RUN chown -R trainee:mercari /app
+
+RUN npm ci
+
 USER trainee
 
-CMD ["node", "-v"]
+CMD ["npm", "start"]
