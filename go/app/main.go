@@ -55,7 +55,6 @@ func (s ServerImpl) addItem(c echo.Context) error {
 	name := c.FormValue("name")
 	category := c.FormValue("category")
 
-
 	// 画像ファイルの保存
 	imageFile, err := c.FormFile("image")
 	if err != nil {
@@ -75,8 +74,11 @@ func (s ServerImpl) addItem(c echo.Context) error {
 		c.Logger().Errorf("Error starting database transactione: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
 	}
-	defer tx.Rollback()
-	
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			c.Logger().Errorf("Database transaction rollback failed: %v", err)
+		}
+	}()
 
 	// カテゴリが存在するか調べる
 	var categoryID int64
@@ -116,7 +118,6 @@ func (s ServerImpl) addItem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 	
-
 	// ログとJSONレスポンスの作成
 	c.Logger().Infof("Received item: %s, Category: %s", name, category)
 	message := fmt.Sprintf("item received: %s", name)
@@ -187,7 +188,7 @@ func  (s ServerImpl) getImg(c echo.Context) error {
 
 	// 拡張子がjpgがチェック
 	if !strings.HasSuffix(imgPath, ".jpg") {
-		c.Logger().Error("Image path does not end with .jpg")
+		c.Logger().Errorf("Image path does not end with .jpg, got: %s", imgPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Image path does not end with .jpg")
 	}
 
@@ -236,6 +237,7 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 
 	// 行先ファイルを作成
 	hashedImageName := fmt.Sprintf("%x.jpg", hashString)
+
 	dst, err := os.Create(path.Join(ImgDir, hashedImageName))
 	if err != nil {
 		return "", err
