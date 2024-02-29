@@ -23,10 +23,16 @@ import (
 const (
 	ImgDir = "images"
 	DbFilePath = "./db/mercari.sqlite3"
+	ItemsSchemaPath = "./db/items.db"
+	CategoriesSchemaPath = "./db/categories.db"
 )
 
 type Response struct {
 	Message string `json:"message"`
+}
+
+type ServerImpl struct {
+	db *sql.DB
 }
 
 type Item struct {
@@ -43,7 +49,7 @@ func root(c echo.Context) error {
 	return echo.NewHTTPError(http.StatusOK, "Hello, world!")
 }
 
-func addItem(c echo.Context) error {
+func (s ServerImpl) addItem(c echo.Context) error {
 	// Get form data
 	name := c.FormValue("name")
 	category := c.FormValue("category")
@@ -61,17 +67,8 @@ func addItem(c echo.Context) error {
 	}
 
 
-	// DBとの接続
-	db, err := sql.Open("sqlite3", DbFilePath)
-	if err != nil {
-		c.Logger().Errorf("Error connecting to the database: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
-	}
-	defer db.Close()
-
-
 	// トランザクション開始
-	tx, err := db.Begin()
+	tx, err := s.db.Begin()
 	if err != nil {
 		c.Logger().Errorf("Error starting database transactione: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error starting database transaction")
@@ -126,33 +123,11 @@ func addItem(c echo.Context) error {
 	res := Response{Message: message}
 
 	return c.JSON(http.StatusOK, res)
-
 }
 
-func getItems(c echo.Context) error {
-	// items.jsonのデータを構造体にデコード
-	items, err := decodeItems()
-	if err != nil {
-		res := Response{Message: "Error decoding JSON"}
-		return c.JSON(http.StatusInternalServerError, res)
-	}
-	
-	// ログとJSONレスポンスの作成
-	c.Logger().Info("Retrieved items")
-	return c.JSON(http.StatusOK, items)
-}
-
-func getItems(c echo.Context) error {
-	// DBとの接続
-	db, err := sql.Open("sqlite3", DbFilePath)
-	if err != nil {
-		c.Logger().Errorf("Error connecting to the database: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
-	}
-	defer db.Close()
-
+func  (s ServerImpl) getItems(c echo.Context) error {
 	// データの読み込み
-	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id")
+	rows, err := s.db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
 	if err != nil {
 		c.Logger().Errorf("Error querying items from the database: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
@@ -176,20 +151,12 @@ func getItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
-func searchItems(c echo.Context) error {
-	// DBとの接続
-	db, err := sql.Open("sqlite3", DbFilePath)
-	if err != nil {
-		c.Logger().Errorf("Error connecting to the database: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
-	}
-	defer db.Close()
-
+func  (s ServerImpl) searchItems(c echo.Context) error {
 	// クエリパラメータを受け取る
 	keyword := c.QueryParam("keyword")
 
 	// データの読み込み
-	rows, err := db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.name LIKE '%' || ? || '%'", keyword)
+	rows, err := s.db.Query("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.name LIKE '%' || ? || '%'", keyword)
 	if err != nil {
 		c.Logger().Errorf("Error querying items from the database: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying items from the database")
@@ -264,17 +231,8 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 	return hashedImageName, nil
 }
 
-func getItemById(c echo.Context) error {
-
-  // DBとの接続
-	db, err := sql.Open("sqlite3", DbFilePath)
-	if err != nil {
-		c.Logger().Errorf("Error connecting to the database: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to the database")
-	}
-	defer db.Close()
-
-	id := c.Param("id")
+func  (s ServerImpl) getItemById(c echo.Context) error {
+  id := c.Param("id")
 	itemID, err := strconv.Atoi(id)
 	if err != nil {
 		c.Logger().Errorf("Invalid item ID: %v", err)
@@ -283,7 +241,7 @@ func getItemById(c echo.Context) error {
 	var item Item
 
 	// データの読み込み
-	row := db.QueryRow("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.id = ?", itemID)
+	row := s.db.QueryRow("SELECT items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id WHERE items.id = ?", itemID)
 	err = row.Scan(&item.Name, &item.Category, &item.ImageName)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -297,6 +255,29 @@ func getItemById(c echo.Context) error {
 	// ログとJSONレスポンスの作成
 	c.Logger().Info("Retrieved items")
 	return c.JSON(http.StatusOK, item)
+}
+
+func  (s ServerImpl) createTables() error {
+	// ItemsSchema読み込み
+	itemsSchema, err := os.ReadFile(ItemsSchemaPath)
+	if err != nil {
+		return fmt.Errorf("Error reading Items schema file: %v", err)
+	}
+	// CategoriesSchema読み込み
+	categoriesSchema, err := os.ReadFile(CategoriesSchemaPath)
+	if err != nil {
+		return fmt.Errorf("Error reading Categories schema file: %v", err)
+	}
+	// Itemsテーブル作成
+	if _, err := s.db.Exec(string(itemsSchema)); err != nil {
+		return fmt.Errorf("Error creating Items table: %v", err)
+	}
+	// Categoriesテーブル作成
+	if _, err := s.db.Exec(string(categoriesSchema)); err != nil {
+		return fmt.Errorf("Error creating Categories table: %v", err)
+	}
+
+	return nil
 }
 
 func main() {
@@ -316,14 +297,27 @@ func main() {
 		AllowMethods: []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete},
 	}))
 
+	// DBとの接続
+	// dbにはポインタが返される
+	db, err := sql.Open("sqlite3", DbFilePath)
+	if err != nil {
+		e.Logger.Errorf("Error connecting to the database: %v", err)
+	}
+	defer db.Close()
+
+	serverImpl := ServerImpl{db: db}
+
+	// テーブルの作成
+	if err := serverImpl.createTables(); err != nil {
+		e.Logger.Errorf("Failed to create tables: %v", err)
+	}
 
 	// Routes
 	e.GET("/", root)
-	e.POST("/items", addItem)
-	e.GET("/items", getItems)
-	e.GET("/search", searchItems)
-
-	e.GET("/items/:id", getItemById)
+	e.POST("/items", serverImpl.addItem)
+	e.GET("/items", serverImpl.getItems)
+	e.GET("/search", serverImpl.searchItems)
+	e.GET("/items/:id", serverImpl.getItemById)
 	e.GET("/image/:imageFilename", getImg)
 
 
