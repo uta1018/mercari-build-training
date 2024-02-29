@@ -49,7 +49,6 @@ func addItem(c echo.Context) error {
 	name := c.FormValue("name")
 	category := c.FormValue("category")
 
-
 	// 画像ファイルの保存
 	imageFile, err := c.FormFile("image")
 	if err != nil {
@@ -122,13 +121,26 @@ func addItem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
 	
-
 	// ログとJSONレスポンスの作成
 	c.Logger().Infof("Received item: %s, Category: %s", name, category)
 	message := fmt.Sprintf("item received: %s", name)
 	res := Response{Message: message}
 
 	return c.JSON(http.StatusOK, res)
+
+}
+
+func getItems(c echo.Context) error {
+	// items.jsonのデータを構造体にデコード
+	items, err := decodeItems()
+	if err != nil {
+		res := Response{Message: "Error decoding JSON"}
+		return c.JSON(http.StatusInternalServerError, res)
+	}
+	
+	// ログとJSONレスポンスの作成
+	c.Logger().Info("Retrieved items")
+	return c.JSON(http.StatusOK, items)
 }
 
 func getItems(c echo.Context) error {
@@ -237,6 +249,7 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 
 	// 行先ファイルを作成
 	hashedImageName := fmt.Sprintf("%x.jpg", hashString)
+
 	dst, err := os.Create(path.Join(ImgDir, hashedImageName))
 	if err != nil {
 		return "", err
@@ -253,6 +266,7 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 }
 
 func getItemById(c echo.Context) error {
+
   // DBとの接続
 	db, err := sql.Open("sqlite3", DbFilePath)
 	if err != nil {
@@ -309,6 +323,7 @@ func main() {
 	e.POST("/items", addItem)
 	e.GET("/items", getItems)
 	e.GET("/search", searchItems)
+
 	e.GET("/items/:id", getItemById)
 	e.GET("/image/:imageFilename", getImg)
 
