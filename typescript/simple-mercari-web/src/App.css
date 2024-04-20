@@ -1,4 +1,5 @@
 @charset "UTF-8";
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@900&family=Noto+Serif+JP&family=Roboto:wght@100&display=swap');
 
 body {
   color: #333;
@@ -36,6 +37,7 @@ li {
 }
 
 .Title {
+  font-family: 'Roboto', sans-serif;
   background-color: white;
   min-height: 8vh;
   display: flex;
@@ -49,12 +51,13 @@ li {
   right: 0;
   z-index: 1;
   box-shadow: 0 0 1px #999;
+  color: #324851;
 }
 
 .Listing {
   margin-top: 8vh;
-  background-color: #222427;
-  min-height: 10vh;
+  background-color: #324851;
+  min-height: 8vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -108,19 +111,20 @@ form button{
   font-weight: bold;
   border-radius: 2px;
   padding: 0 8px;
-  color: #333;
+  color: #324851;
   background: white;
   border: 1px solid white;
   transition: background .3s, color .3s;
+  font-family: 'Roboto', sans-serif;
 }
 
 form button:hover {
   color: white;
-  background: #222427;
+  background: #324851;
 }
 
 #top {
-  padding-top: 80px;
+  padding-top: 60px;
   padding-bottom: 160px;
 }
 
@@ -128,7 +132,7 @@ form button:hover {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(16vw, 100%), 1fr));
-  gap: 20px;
+  gap: 28px;
 }
 
 .ItemList li {
@@ -151,6 +155,7 @@ form button:hover {
   vertical-align: top;
   object-fit: cover;
   width: 100%;
+  height: 100%;
   position: absolute;
   top: 0;
   left: 0;
