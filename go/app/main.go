@@ -11,19 +11,19 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
 
-	"io"
 	"crypto/sha256"
+	"database/sql"
+	"errors"
+	_ "github.com/mattn/go-sqlite3"
+	"io"
 	"mime/multipart"
 	"strconv"
-	"database/sql"
-	_ "github.com/mattn/go-sqlite3"
-	"errors"
 )
 
 const (
-	ImgDir = "images"
-	DbFilePath = "./db/mercari.sqlite3"
-	ItemsSchemaPath = "./db/items.db"
+	ImgDir               = "images"
+	DbFilePath           = "./db/mercari.sqlite3"
+	ItemsSchemaPath      = "./db/items.db"
 	CategoriesSchemaPath = "./db/categories.db"
 )
 
@@ -36,9 +36,9 @@ type ServerImpl struct {
 }
 
 type Item struct {
-	Id int `json:"id"`
-	Name string `json:"name"`
-	Category string `json:"category"`
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	Category  string `json:"category"`
 	ImageName string `json:"image_name"`
 }
 
@@ -58,15 +58,14 @@ func (s ServerImpl) addItem(c echo.Context) error {
 	// 画像ファイルの保存
 	imageFile, err := c.FormFile("image")
 	if err != nil {
-			c.Logger().Errorf("Error uploading image: %v", err)
-			return echo.NewHTTPError(http.StatusInternalServerError, "Error uploading image")
+		c.Logger().Errorf("Error uploading image: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error uploading image")
 	}
 	imageName, err := saveImage(imageFile)
 	if err != nil {
-			c.Logger().Errorf("Error saving image: %v", err)
-			return echo.NewHTTPError(http.StatusInternalServerError, "Error saving image")
+		c.Logger().Errorf("Error saving image: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Error saving image")
 	}
-
 
 	// トランザクション開始
 	tx, err := s.db.Begin()
@@ -85,17 +84,16 @@ func (s ServerImpl) addItem(c echo.Context) error {
 	err = tx.QueryRow("SELECT id FROM categories WHERE name = ?", category).Scan(&categoryID)
 	// カテゴリが存在しない場合、新しいカテゴリを追加
 	if errors.Is(err, sql.ErrNoRows) {
-			result, err := tx.Exec("INSERT INTO categories (name) VALUES (?)", category)
-			if err != nil {
-				c.Logger().Errorf("Error adding new category to the database: %v", err)
-				return echo.NewHTTPError(http.StatusInternalServerError, "Error adding new category to the database")
-			}
-			categoryID, _ = result.LastInsertId()
+		result, err := tx.Exec("INSERT INTO categories (name) VALUES (?)", category)
+		if err != nil {
+			c.Logger().Errorf("Error adding new category to the database: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "Error adding new category to the database")
+		}
+		categoryID, _ = result.LastInsertId()
 	} else if err != nil {
 		c.Logger().Errorf("Error querying categories from the database: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error querying categories from the database")
 	}
-	
 
 	// dbに保存
 	stmt, err := tx.Prepare("INSERT INTO items (name, category_id, image_name) VALUES (?, ?, ?)")
@@ -111,13 +109,12 @@ func (s ServerImpl) addItem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error saving item to database")
 	}
 
-
 	// トランザクションコミット
 	if err := tx.Commit(); err != nil {
 		c.Logger().Errorf("Error committing database transaction: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Error committing database transaction")
 	}
-	
+
 	// ログとJSONレスポンスの作成
 	c.Logger().Infof("Received item: %s, Category: %s", name, category)
 	message := fmt.Sprintf("item received: %s", name)
@@ -126,7 +123,7 @@ func (s ServerImpl) addItem(c echo.Context) error {
 	return c.JSON(http.StatusOK, res)
 }
 
-func  (s ServerImpl) getItems(c echo.Context) error {
+func (s ServerImpl) getItems(c echo.Context) error {
 	// データの読み込み
 	rows, err := s.db.Query("SELECT items.id, items.name, categories.name as category, items.image_name FROM items join categories on items.category_id = categories.id;")
 	if err != nil {
@@ -152,7 +149,7 @@ func  (s ServerImpl) getItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
-func  (s ServerImpl) searchItems(c echo.Context) error {
+func (s ServerImpl) searchItems(c echo.Context) error {
 	// クエリパラメータを受け取る
 	keyword := c.QueryParam("keyword")
 
@@ -181,7 +178,7 @@ func  (s ServerImpl) searchItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
-func  (s ServerImpl) getImg(c echo.Context) error {
+func (s ServerImpl) getImg(c echo.Context) error {
 	// id+.jpgが渡ってくる
 	imageIDWithExtension := c.Param("imageFilename")
 	imgPath := path.Join(ImgDir, imageIDWithExtension)
@@ -194,7 +191,7 @@ func  (s ServerImpl) getImg(c echo.Context) error {
 
 	// 拡張子を取り除く
 	imageID := strings.TrimSuffix(imageIDWithExtension, ".jpg")
-	
+
 	// imageIDを使ってデータベースに問い合わせて、該当する画像のパスを取得する
 	var imgPathById string
 	err := s.db.QueryRow("SELECT image_name FROM items WHERE id = ?", imageID).Scan(&imgPathById)
@@ -245,7 +242,7 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 	defer dst.Close()
 
 	// 元ファイルを読み込み、行先ファイルに保存
-	src.Seek(0, 0) 
+	src.Seek(0, 0)
 	if _, err := io.Copy(dst, src); err != nil {
 		return "", err
 	}
@@ -253,8 +250,8 @@ func saveImage(file *multipart.FileHeader) (string, error) {
 	return hashedImageName, nil
 }
 
-func  (s ServerImpl) getItemById(c echo.Context) error {
-  id := c.Param("id")
+func (s ServerImpl) getItemById(c echo.Context) error {
+	id := c.Param("id")
 	itemID, err := strconv.Atoi(id)
 	if err != nil {
 		c.Logger().Errorf("Invalid item ID: %v", err)
@@ -279,7 +276,7 @@ func  (s ServerImpl) getItemById(c echo.Context) error {
 	return c.JSON(http.StatusOK, item)
 }
 
-func  (s ServerImpl) createTables() error {
+func (s ServerImpl) createTables() error {
 	// ItemsSchema読み込み
 	itemsSchema, err := os.ReadFile(ItemsSchemaPath)
 	if err != nil {
@@ -341,7 +338,6 @@ func main() {
 	e.GET("/search", serverImpl.searchItems)
 	e.GET("/items/:id", serverImpl.getItemById)
 	e.GET("/image/:imageFilename", serverImpl.getImg)
-
 
 	// Start server
 	e.Logger.Fatal(e.Start(":9000"))
