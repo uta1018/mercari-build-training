@@ -1,6 +1,6 @@
 ### 📝追記
 勉強用メモ
-https://www.notion.so/uta-workplace/Build-Mercari-06944aef1a6e4c6aa13fe47dd866e038?pvs=4
+https://uta-workplace.notion.site/Build-Mercari-06944aef1a6e4c6aa13fe47dd866e038?pvs=4
 
 # Build@Mercari Training Program 
 
