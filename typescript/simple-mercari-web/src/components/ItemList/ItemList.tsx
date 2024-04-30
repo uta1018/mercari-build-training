@@ -45,9 +45,11 @@ export const ItemList: React.FC<Prop> = (props) => {
     }
   }, [reload]);
 
+  const existsItems = items && items.length > 0
+
   return (
     <ul className='ItemList' id='top'>
-      {items.map((item) => {
+      {existsItems && items.map((item) => {
         return (
           <li key={item.id} className='ItemCard'>
             <a href='#'>
