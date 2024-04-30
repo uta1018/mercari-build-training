@@ -15,6 +15,9 @@ COPY . .
 # dbディレクトリ内の複数ファイルの所有者を変更
 RUN chown -R trainee:mercari db
 
+# appディレクトリ内の複数ファイルの所有者を変更
+RUN chown -R trainee:mercari app
+
 # imagesディレクトリ内の複数ファイルの所有者を変更
 RUN chown -R trainee:mercari images
 
@@ -25,5 +28,10 @@ USER trainee
 
 RUN go mod download
 
-# docker起動時にapp/mainを実行
-CMD ["go", "run", "app/main.go"]
+# 各パッケージのビルドと実行
+RUN go build -o ./app/constant/constant ./app/constant
+RUN go build -o ./app/image/image ./app/image
+RUN go build -o ./app/model/model ./app/model
+
+# main.goを実行
+CMD ["go", "run", "./app/main.go"]

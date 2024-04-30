@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	ImgDir = "../images"
+	ImgDir = "./images"
 )
 
 // saveImage は画像を保存し、ハッシュ化した名前を返す関数
