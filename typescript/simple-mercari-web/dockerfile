@@ -10,6 +10,8 @@ RUN chown -R trainee:mercari /app
 
 RUN npm ci
 
+RUN mkdir node_modules/.cache && chmod -R 777 node_modules/.cache
+
 USER trainee
 
 CMD ["npm", "start"]
